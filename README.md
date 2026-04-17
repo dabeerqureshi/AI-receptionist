@@ -1,112 +1,116 @@
 # AI Receptionist Booking API
 
-Production-ready multi-tenant appointment booking system for clinics, designed for Vapi voice AI integration.
+✅ Production ready multi-tenant appointment booking system for clinics, Vapi compatible.
 
-## ✨ Features
+## ✅ Features
 
-- ✅ **Multi-tenancy** - Full tenant isolation with secure JWT authentication
-- ✅ **Smart Availability** - 30-minute slot generation with working hours and holiday support
-- ✅ **Booking Management** - Book, cancel, reschedule appointments
-- ✅ **Timezone Support** - Per-tenant timezone handling (store UTC, display local)
-- ✅ **Vapi Compatible** - Simple JSON APIs ready for Vapi tool calls
-- ✅ **Clean Architecture** - Service layer pattern, proper separation of concerns
-- ✅ **Production Ready** - Logging, error handling, input validation
+| Feature | Status |
+|---|---|
+| Multi-Tenant SaaS | ✅ |
+| API Key Authentication | ✅ |
+| 60 Minute Appointments | ✅ |
+| Working Hours 8AM - 5PM | ✅ |
+| Sunday Closed | ✅ |
+| Double Booking Protection | ✅ |
+| Vapi Ready Endpoints | ✅ |
+| Request Logging | ✅ |
+
+---
 
 ## 🚀 Quick Start
 
-### 1. Install Dependencies
 ```bash
 pip install -r requirements.txt
-```
-
-### 2. Run Server
-```bash
 uvicorn app.main:app --reload
 ```
 
-### 3. Access API Documentation
-- Swagger UI: http://localhost:8000/docs
-- ReDoc: http://localhost:8000/redoc
+✅ Server running at: http://localhost:8000
+✅ API Documentation: http://localhost:8000/docs
+
+---
 
 ## 📋 API Endpoints
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/auth/login` | Get JWT token (demo: demo/demo) |
-| POST | `/check-availability` | Check available slots for doctor + date |
-| POST | `/suggest-slot` | Get earliest available slot |
-| POST | `/book-appointment` | Create new appointment |
-| POST | `/cancel/{id}` | Cancel appointment |
-| POST | `/reschedule/{id}` | Reschedule appointment |
-| GET | `/appointments` | Get all appointments for tenant |
-
-## 🏗️ Architecture
-
+### 🔑 Authentication
+Add header to all requests:
 ```
-app/
-├── main.py                 # FastAPI application entry
-├── db/
-│   └── database.py         # DB configuration & session management
-├── models/
-│   └── models.py           # SQLAlchemy ORM models
-├── schemas/
-│   └── schemas.py          # Pydantic validation schemas
-├── services/
-│   ├── auth_service.py     # JWT authentication
-│   ├── availability_service.py  # Slot generation logic
-│   └── booking_service.py  # Appointment business logic
-└── api/
-    └── routes.py           # API route definitions
+X-API-Key: demo-clinic-key-123
 ```
 
-## 🔐 Authentication
+### ✅ Check Availability
+```http
+POST /check-availability
+Content-Type: application/json
 
-All endpoints (except /auth/login and /health) require JWT token in Authorization header:
-```
-Authorization: Bearer <your-token>
-```
-
-Token contains `tenant_id` which is automatically injected into all operations. Tenant ID is NEVER accepted from request body.
-
-## 🔧 Configuration
-
-Edit `.env` file for environment variables:
-- `DATABASE_URL` - Database connection string
-- `JWT_SECRET_KEY` - Secret for signing tokens
-- `JWT_EXPIRE_MINUTES` - Token expiration time
-
-## 🎯 Vapi Integration
-
-This API is designed to be directly used as Vapi tools. All endpoints accept simple JSON inputs and return clean flat responses that voice AI can easily parse.
-
-Example Vapi tool configuration:
-```json
 {
-  "name": "check_availability",
-  "description": "Check available appointment slots",
-  "parameters": {
-    "doctor_id": "number",
-    "date": "YYYY-MM-DD"
-  }
+  "date": "2026-04-25",
+  "time": "09:00"
 }
 ```
 
-## 📊 Database Models
+Response:
+```json
+{
+  "available": true,
+  "message": "Slot is available"
+}
+```
 
-- **Tenant** - Clinic/organization with timezone
-- **Doctor** - Doctors per clinic
-- **Appointment** - Patient appointments
-- **WorkingHours** - Clinic and doctor specific hours
-- **Holiday** - Clinic closed dates
+### ✅ Book Appointment
+```http
+POST /book-appointment
+Content-Type: application/json
 
-## 🧪 Testing
+{
+  "patient_name": "John Smith",
+  "patient_phone": "+1234567890",
+  "date": "2026-04-25",
+  "time": "09:00"
+}
+```
 
-Use the interactive Swagger UI at `/docs` to test all endpoints.
+Response:
+```json
+{
+  "success": true,
+  "appointment_id": 1,
+  "message": "Appointment booked successfully"
+}
+```
 
-1. First login with `demo` / `demo` to get your token
-2. Click "Authorize" button and enter the token
-3. Test all endpoints
+---
 
-## 📝 License
+## 🏢 Multi-Tenant SaaS
 
-Production ready for clinic AI receptionist systems.
+Add new clinics in `.env` file:
+```
+CLINIC_4_KEY=your-new-clinic-secret-key
+```
+
+Each clinic gets their own API key. All data is 100% isolated.
+
+---
+
+## 🎯 Vapi Integration
+
+Add this header in your Vapi tool configuration:
+```
+Header Name: X-API-Key
+Header Value: their-api-key
+```
+
+Endpoints are designed specifically for Vapi voice AI. No extra setup required.
+
+---
+
+## ⚙️ Configuration
+
+Edit `.env` file:
+```
+DATABASE_URL=sqlite:///./receptionist.db
+CLINIC_1_KEY=demo-clinic-key-123
+CLINIC_2_KEY=clinic-key-456
+CLINIC_3_KEY=clinic-key-789
+```
+
+---
