@@ -1,0 +1,11 @@
+/venv
+/app.log
+/app/__pycache__
+/app/api/__pycache__
+/app/db/__pycache__
+/app/schemas/__pycache__
+/app/services/__pycache__
+/app/models/__pycache__
+VAPI_SETUP_GUIDE.md
+/receptionist.log
+/receptionist.db
