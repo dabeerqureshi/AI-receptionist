@@ -22,7 +22,6 @@ def book_appointment(request: BookAppointmentRequest, db: Session = Depends(get_
         appointment_time = datetime.strptime(request.time, "%H:%M").time()
 
     appointment, message = booking_service.book_appointment(
-        tenant_id=request.tenant_id,
         name=request.patient_name,
         phone=request.patient_phone,
         appointment_date=appointment_date,

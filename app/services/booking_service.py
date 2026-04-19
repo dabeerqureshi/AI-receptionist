@@ -9,7 +9,7 @@ class BookingService:
         self.db = db
         self.scheduler = Scheduler(db)
 
-    def book_appointment(self, tenant_id, name, phone, appointment_date, appointment_time, appointment_type_name, notes=None):
+    def book_appointment(self, name, phone, appointment_date, appointment_time, appointment_type_name, notes=None):
         appointment_type = self.db.query(AppointmentType).filter(
             AppointmentType.name == appointment_type_name
         ).first()
@@ -25,7 +25,6 @@ class BookingService:
             self.db.refresh(appointment_type)
 
         available_slots = self.scheduler.get_available_slots(
-            tenant_id,
             appointment_date,
             appointment_type_name,
             max_slots=100
@@ -45,7 +44,6 @@ class BookingService:
                    timedelta(minutes=appointment_type.duration_minutes)).time()
 
         appointment = Appointment(
-            tenant_id=tenant_id,
             patient_id=patient.id,
             appointment_type_id=appointment_type.id,
             date=appointment_date,

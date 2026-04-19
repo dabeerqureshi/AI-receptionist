@@ -11,15 +11,6 @@ class AppointmentStatus(str, enum.Enum):
     COMPLETED = "completed"
 
 
-class Clinic(Base):
-    __tablename__ = "clinics"
-
-    id = Column(Integer, primary_key=True, index=True)
-    tenant_id = Column(Integer, unique=True, index=True)
-    name = Column(String)
-    created_at = Column(DateTime, default=datetime.utcnow)
-
-
 class Patient(Base):
     __tablename__ = "patients"
 
@@ -44,7 +35,6 @@ class Appointment(Base):
     __tablename__ = "appointments"
 
     id = Column(Integer, primary_key=True, index=True)
-    tenant_id = Column(Integer, index=True)
     patient_id = Column(Integer, ForeignKey("patients.id"))
     appointment_type_id = Column(Integer, ForeignKey("appointment_types.id"))
     date = Column(Date, index=True)
@@ -62,7 +52,6 @@ class WorkingHours(Base):
     __tablename__ = "working_hours"
 
     id = Column(Integer, primary_key=True, index=True)
-    tenant_id = Column(Integer, index=True)
     day_of_week = Column(Integer, index=True)
     open_time = Column(Time)
     close_time = Column(Time)
@@ -73,6 +62,5 @@ class Holiday(Base):
     __tablename__ = "holidays"
 
     id = Column(Integer, primary_key=True, index=True)
-    tenant_id = Column(Integer, index=True)
     date = Column(Date, index=True)
     reason = Column(String, nullable=True)

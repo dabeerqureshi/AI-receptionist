@@ -9,11 +9,11 @@ class Scheduler:
         self.default_open = time(9, 0)
         self.default_close = time(17, 0)
 
-    def get_available_slots(self, tenant_id, check_date, appointment_type_name, max_slots=5):
-        if self._is_holiday(tenant_id, check_date):
+    def get_available_slots(self, check_date, appointment_type_name, max_slots=5):
+        if self._is_holiday(check_date):
             return []
 
-        working_hours = self._get_working_hours(tenant_id, check_date.weekday())
+        working_hours = self._get_working_hours(check_date.weekday())
         if working_hours.is_closed:
             return []
 
@@ -32,7 +32,6 @@ class Scheduler:
         buffer = appointment_type.buffer_minutes
 
         existing_appointments = self.db.query(Appointment).filter(
-            Appointment.tenant_id == tenant_id,
             Appointment.date == check_date,
             Appointment.status == "scheduled"
         ).all()
@@ -64,15 +63,13 @@ class Scheduler:
 
         return slots
 
-    def _is_holiday(self, tenant_id, date):
+    def _is_holiday(self, date):
         return self.db.query(Holiday).filter(
-            Holiday.tenant_id == tenant_id,
             Holiday.date == date
         ).first() is not None
 
-    def _get_working_hours(self, tenant_id, day_of_week):
+    def _get_working_hours(self, day_of_week):
         wh = self.db.query(WorkingHours).filter(
-            WorkingHours.tenant_id == tenant_id,
             WorkingHours.day_of_week == day_of_week
         ).first()
 
