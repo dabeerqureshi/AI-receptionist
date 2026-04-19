@@ -9,3 +9,5 @@
 VAPI_SETUP_GUIDE.md
 /receptionist.log
 /receptionist.db
+/.env
+/app/routes/__pycache__

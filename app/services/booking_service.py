@@ -1,147 +1,62 @@
-from datetime import date, time, datetime
+from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
-from app.models.models import Appointment, AppointmentStatus
-from app.services.availability_service import AvailabilityService
-import logging
-
-logger = logging.getLogger(__name__)
+from app.db.models import Patient, Appointment, AppointmentType
+from app.services.scheduler import Scheduler
 
 
 class BookingService:
-    """
-    Service for handling appointment booking, cancellation and rescheduling.
-    All operations are tenant-isolated and validate availability before changes.
-    """
-
-    def __init__(self, db: Session, tenant_id: int):
+    def __init__(self, db: Session):
         self.db = db
-        self.tenant_id = tenant_id
-        self.availability_service = AvailabilityService(db, tenant_id)
+        self.scheduler = Scheduler(db)
 
-    def book_appointment(self, doctor_id: int, patient_name: str, appointment_date: date,
-                        appointment_time: str, patient_phone: str = None, notes: str = None):
-        """
-        Book a new appointment.
-        Checks for double booking before creating appointment.
-        """
+    def book_appointment(self, tenant_id, name, phone, appointment_date, appointment_time, appointment_type_name, notes=None):
+        appointment_type = self.db.query(AppointmentType).filter(
+            AppointmentType.name == appointment_type_name
+        ).first()
 
-        # Validate slot is available first
-        if not self.availability_service.is_slot_available(doctor_id, appointment_date, appointment_time):
-            return {
-                "success": False,
-                "message": "Selected time slot is not available"
-            }
-
-        try:
-            # Parse time string to time object
-            appt_time = datetime.strptime(appointment_time, "%H:%M").time()
-
-            # Create appointment record
-            appointment = Appointment(
-                tenant_id=self.tenant_id,
-                doctor_id=doctor_id,
-                patient_name=patient_name,
-                patient_phone=patient_phone,
-                date=appointment_date,
-                time=appt_time,
-                status=AppointmentStatus.SCHEDULED,
-                notes=notes
+        if not appointment_type:
+            appointment_type = AppointmentType(
+                name=appointment_type_name,
+                duration_minutes=60,
+                buffer_minutes=5
             )
-
-            self.db.add(appointment)
+            self.db.add(appointment_type)
             self.db.commit()
-            self.db.refresh(appointment)
+            self.db.refresh(appointment_type)
 
-            logger.info(f"Appointment booked successfully: ID {appointment.id}")
+        available_slots = self.scheduler.get_available_slots(
+            tenant_id,
+            appointment_date,
+            appointment_type_name,
+            max_slots=100
+        )
 
-            return {
-                "success": True,
-                "appointment_id": appointment.id,
-                "message": "Appointment booked successfully"
-            }
+        if appointment_time not in available_slots:
+            return None, "This time slot is no longer available"
 
-        except Exception as e:
-            self.db.rollback()
-            logger.error(f"Error booking appointment: {str(e)}")
-            return {
-                "success": False,
-                "message": f"Error booking appointment: {str(e)}"
-            }
+        patient = self.db.query(Patient).filter(Patient.phone == phone).first()
+        if not patient:
+            patient = Patient(name=name, phone=phone)
+            self.db.add(patient)
+            self.db.commit()
+            self.db.refresh(patient)
 
-    def cancel_appointment(self, appointment_id: int):
-        """Cancel an existing appointment"""
-        appointment = self.db.query(Appointment).filter(
-            Appointment.tenant_id == self.tenant_id,
-            Appointment.id == appointment_id
-        ).first()
+        end_time = (datetime.combine(appointment_date, appointment_time) +
+                   timedelta(minutes=appointment_type.duration_minutes)).time()
 
-        if not appointment:
-            return {
-                "success": False,
-                "message": "Appointment not found"
-            }
+        appointment = Appointment(
+            tenant_id=tenant_id,
+            patient_id=patient.id,
+            appointment_type_id=appointment_type.id,
+            date=appointment_date,
+            start_time=appointment_time,
+            end_time=end_time,
+            status="scheduled",
+            notes=notes
+        )
 
-        appointment.status = AppointmentStatus.CANCELLED
+        self.db.add(appointment)
         self.db.commit()
+        self.db.refresh(appointment)
 
-        logger.info(f"Appointment cancelled: ID {appointment_id}")
-
-        return {
-            "success": True,
-            "message": "Appointment cancelled successfully"
-        }
-
-    def reschedule_appointment(self, appointment_id: int, new_date: date, new_time: str):
-        """Reschedule an existing appointment to new date/time"""
-        appointment = self.db.query(Appointment).filter(
-            Appointment.tenant_id == self.tenant_id,
-            Appointment.id == appointment_id
-        ).first()
-
-        if not appointment:
-            return {
-                "success": False,
-                "message": "Appointment not found"
-            }
-
-        if appointment.status == AppointmentStatus.CANCELLED:
-            return {
-                "success": False,
-                "message": "Cannot reschedule cancelled appointment"
-            }
-
-        # Validate new slot is available
-        if not self.availability_service.is_slot_available(appointment.doctor_id, new_date, new_time):
-            return {
-                "success": False,
-                "message": "Selected new time slot is not available"
-            }
-
-        try:
-            appt_time = datetime.strptime(new_time, "%H:%M").time()
-
-            appointment.date = new_date
-            appointment.time = appt_time
-
-            self.db.commit()
-
-            logger.info(f"Appointment rescheduled: ID {appointment_id} to {new_date} {new_time}")
-
-            return {
-                "success": True,
-                "message": "Appointment rescheduled successfully"
-            }
-
-        except Exception as e:
-            self.db.rollback()
-            logger.error(f"Error rescheduling appointment: {str(e)}")
-            return {
-                "success": False,
-                "message": f"Error rescheduling appointment: {str(e)}"
-            }
-
-    def get_tenant_appointments(self):
-        """Get all appointments for current tenant"""
-        return self.db.query(Appointment).filter(
-            Appointment.tenant_id == self.tenant_id
-        ).order_by(Appointment.date, Appointment.time).all()
+        return appointment, f"Appointment confirmed for {appointment_date} at {appointment_time}"
