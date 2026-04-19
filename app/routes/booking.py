@@ -14,7 +14,12 @@ def book_appointment(request: BookAppointmentRequest, db: Session = Depends(get_
     # Parse date and time strings
     from datetime import datetime
     appointment_date = datetime.strptime(request.date, "%Y-%m-%d").date()
-    appointment_time = datetime.strptime(request.time, "%H:%M").time()
+    
+    # Handle both time formats: HH:MM and HH:MM:SS
+    try:
+        appointment_time = datetime.strptime(request.time, "%H:%M:%S").time()
+    except ValueError:
+        appointment_time = datetime.strptime(request.time, "%H:%M").time()
 
     appointment, message = booking_service.book_appointment(
         tenant_id=request.tenant_id,

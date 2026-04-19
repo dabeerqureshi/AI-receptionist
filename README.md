@@ -28,7 +28,7 @@ Fake PMS Database
 **Input:**
 ```json
 {
-  "clinic_id": 1,
+  "tenant_id": 1,
   "date": "2026-04-20",
   "appointment_type": "cleaning"
 }
@@ -45,7 +45,7 @@ Fake PMS Database
 **Input:**
 ```json
 {
-  "clinic_id": 1,
+  "tenant_id": 1,
   "patient_name": "John Doe",
   "patient_phone": "+15551234567",
   "appointment_type": "cleaning",
