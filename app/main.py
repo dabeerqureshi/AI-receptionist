@@ -62,8 +62,37 @@ async def validate_api_key(request: Request, call_next):
     if not api_key or api_key not in API_KEYS:
         raise HTTPException(status_code=401, detail="Invalid or missing API Key")
 
-    # Attach tenant_id to request state
-    request.state.tenant_id = API_KEYS[api_key]
+    # Get authorized tenant id for this API key
+    authorized_tenant_id = f"clinic_{API_KEYS[api_key]}"
+    
+    # ✅ STRICT VALIDATION: BOTH API KEY AND TENANT MUST MATCH
+    if request.method == "POST":
+        try:
+            body = await request.json()
+            request_tenant_id = body.get("tenant_id")
+            
+            if not request_tenant_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail="tenant_id is required in request body"
+                )
+            
+            if request_tenant_id != authorized_tenant_id:
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"ACCESS DENIED: This API Key is only authorized for tenant '{authorized_tenant_id}'"
+                )
+                
+        except HTTPException:
+            raise
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid request body")
+
+    # ✅ Only if validation passes, attach tenant id
+    request.state.tenant_id = authorized_tenant_id
+    
+    # Reset request body so it can be read again by endpoints
+    await request.body()
     
     response = await call_next(request)
     return response

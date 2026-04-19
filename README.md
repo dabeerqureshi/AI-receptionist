@@ -43,6 +43,7 @@ POST /check-availability
 Content-Type: application/json
 
 {
+  "tenant_id": "clinic_123",
   "date": "2026-04-25",
   "time": "09:00"
 }
@@ -62,6 +63,7 @@ POST /book-appointment
 Content-Type: application/json
 
 {
+  "tenant_id": "clinic_123",
   "patient_name": "John Smith",
   "patient_phone": "+1234567890",
   "date": "2026-04-25",
