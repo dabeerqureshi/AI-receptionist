@@ -52,7 +52,7 @@ API_KEYS = {
 @app.middleware("http")
 async def validate_api_key(request: Request, call_next):
     # Skip public endpoints
-    public_paths = ["/", "/health", "/docs", "/openapi.json", "/redoc"]
+    public_paths = ["/", "/health", "/docs", "/openapi.json", "/redoc", "/favicon.ico"]
     if request.url.path in public_paths or request.url.path.startswith("/docs"):
         return await call_next(request)
 
