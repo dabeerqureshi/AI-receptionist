@@ -10,7 +10,7 @@ class CheckAvailabilityRequest(BaseModel):
 class BookAppointmentRequest(BaseModel):
     patient_name: str
     patient_phone: str
-    date: date
-    time: time
+    date: str
+    time: str
     appointment_type: str
     notes: str | None = None

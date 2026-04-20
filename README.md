@@ -1,73 +1,51 @@
-# AI Receptionist
+# AI Dental Receptionist - Phase 1 Backend MVP
 
-A focused appointment-booking backend with a lightweight operations dashboard. The repository contains a FastAPI API for scheduling and a Streamlit dashboard for viewing appointments.
+SaaS Backend for AI Dental Receptionist system. This is the core scheduling engine that will integrate with VAPI voice AI.
 
-## Stack
+---
 
-- FastAPI
-- SQLAlchemy
-- SQLite
-- Pydantic
-- Streamlit
+## 🎯 Phase 1 Status: ✅ COMPLETE
 
-## Project Structure
+## 🏗️ Architecture
 
-- `app/`: API, database models, routes, and services
-- `dashboard.py`: Streamlit dashboard
-- `test.py`: end-to-end booking test script
-- `requirements.txt`: runtime and test dependencies
-
-## Features
-
-- Clinic-scoped booking with `clinic_id`
-- Appointment-type duration and buffer handling
-- Slot availability checks and final booking revalidation
-- Idempotency support for retries
-- Holiday, Sunday, and booking-window validation
-- Dashboard search, filtering, and live refresh
-
-## Setup
-
-```bash
-python -m venv venv
-venv\Scripts\activate
-pip install -r requirements.txt
+```
+VAPI (Future)
+    ↓
+Backend API
+    ↓
+Scheduling Engine
+    ↓
+Fake PMS Database
 ```
 
-## Run the API
+---
 
-```bash
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
+## 🚀 Features Implemented
 
-Available endpoints:
+### ✅ 1. Availability API
+**Endpoint:** `POST /api/v1/check-availability`
 
-- `GET /`
-- `POST /api/v1/check-availability?clinic_id=1`
-- `POST /api/v1/book-appointment?clinic_id=1`
-- `GET /docs`
-
-## Run the Dashboard
-
-```bash
-streamlit run dashboard.py
-```
-
-## Example Payloads
-
-Check availability:
-
+**Input:**
 ```json
 {
+  "tenant_id": 1,
   "date": "2026-04-20",
   "appointment_type": "cleaning"
 }
 ```
 
-Book appointment:
+**Output:**
+- Returns 3-5 best available slots
+- Intelligently distributed across the day
+- Human readable 12 hour format
 
+### ✅ 2. Booking API
+**Endpoint:** `POST /api/v1/book-appointment`
+
+**Input:**
 ```json
 {
+  "tenant_id": 1,
   "patient_name": "John Doe",
   "patient_phone": "+15551234567",
   "appointment_type": "cleaning",
@@ -77,16 +55,73 @@ Book appointment:
 }
 ```
 
-## Testing
+**Output:** Booking confirmation with unique appointment ID
 
-Start the API first, then run:
+---
+
+### ✅ 3. Scheduling Engine
+| Feature | Status |
+|---------|--------|
+| Working Hours 9AM - 5PM | ✅ |
+| Sunday Closed | ✅ |
+| Appointment duration support | ✅ |
+| 5 minute buffer time | ✅ |
+| Holiday exclusion | ✅ |
+| 100% Double booking prevention | ✅ |
+| Atomic database locking | ✅ |
+| Race condition protection | ✅ |
+
+---
+
+### ✅ Supported Appointment Types
+| Type | Duration | Buffer | Total Slot |
+|------|----------|--------|------------|
+| Cleaning | 45 min | 5 min | 50 min |
+| Emergency | 30 min | 5 min | 35 min |
+| Checkup | 30 min | 5 min | 35 min |
+| Filling | 60 min | 10 min | 70 min |
+
+---
+
+## 📦 Database Entities
+- Clinics (Tenants)
+- Patients
+- Appointments
+- Appointment Types
+- Working Hours
+- Holidays
+
+---
+
+## 🔧 Tech Stack
+- FastAPI
+- SQLite (Postgres ready)
+- SQLAlchemy ORM
+- Pydantic schemas
+
+---
+
+## 🚀 Run Server
 
 ```bash
-venv\Scripts\python.exe test.py
+pip install -r requirements.txt
+python app/main.py
 ```
 
-## Notes
+API will be running at: `http://localhost:8000`
 
-- The default database is `receptionist.db`.
-- `tzdata` is included for Windows timezone support.
-- `aiohttp` is included because the repository ships with an async API test script.
+Swagger Docs: `http://localhost:8000/docs`
+
+---
+
+## ⚠️ Phase 1 Exclusions
+❌ No Open Dental integration
+❌ No VAPI integration
+❌ No payment system
+❌ No insurance logic
+❌ No rescheduling system
+
+---
+
+## 📬 Postman Collection
+Import `AI-Receptionist-API.postman_collection.json` for ready to use API requests.
