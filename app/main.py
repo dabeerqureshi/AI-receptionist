@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.db.database import engine, Base
+from app.db.database import Base, SessionLocal, engine
+from app.db.models import Clinic
 from app.routes import availability, booking
 
 Base.metadata.create_all(bind=engine)
@@ -17,6 +18,18 @@ app.add_middleware(
 
 app.include_router(availability.router)
 app.include_router(booking.router)
+
+
+@app.on_event("startup")
+def startup():
+    db = SessionLocal()
+    try:
+        clinic = db.query(Clinic).filter(Clinic.id == 1).first()
+        if clinic is None:
+            db.add(Clinic(id=1, name="Default Clinic"))
+            db.commit()
+    finally:
+        db.close()
 
 
 @app.get("/")

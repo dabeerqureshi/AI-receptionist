@@ -1,20 +1,17 @@
-from pydantic import BaseModel
 from datetime import date, time
+
+from pydantic import BaseModel, Field
 
 
 class CheckAvailabilityRequest(BaseModel):
     date: date
+    appointment_type: str = Field(min_length=1)
 
 
 class BookAppointmentRequest(BaseModel):
-    patient_name: str
-    patient_phone: str
-<<<<<<< HEAD
-    date: str
-    time: str
-=======
+    patient_name: str = Field(min_length=1)
+    patient_phone: str = Field(min_length=1)
     date: date
     time: time
-    appointment_type: str
->>>>>>> 83852af (Restore files from commit 2fc3762)
+    appointment_type: str = Field(min_length=1)
     notes: str | None = None

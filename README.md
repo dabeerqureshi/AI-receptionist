@@ -23,7 +23,7 @@ A focused appointment-booking backend with a lightweight operations dashboard. T
 - Appointment-type duration and buffer handling
 - Slot availability checks and final booking revalidation
 - Idempotency support for retries
-- Holiday, Sunday, and booking-window validation
+- Holiday, weekend, and booking-window validation
 - Dashboard search, filtering, and live refresh
 
 ## Setup
@@ -79,7 +79,7 @@ Book appointment:
 
 ## Testing
 
-Start the API first, then run:
+Run the scenario script directly:
 
 ```bash
 venv\Scripts\python.exe test.py
@@ -89,4 +89,3 @@ venv\Scripts\python.exe test.py
 
 - The default database is `receptionist.db`.
 - `tzdata` is included for Windows timezone support.
-- `aiohttp` is included because the repository ships with an async API test script.

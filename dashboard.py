@@ -310,11 +310,7 @@ hr {
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
 def get_db():
-    db = SessionLocal()
-    try:
-        return db
-    except Exception:
-        db.close()
+    return SessionLocal()
 
 
 def load_appointments(db) -> pd.DataFrame:
@@ -601,4 +597,5 @@ st.markdown(
 
 # ── Auto-refresh ──────────────────────────────────────────────────────────────
 time.sleep(refresh_interval)
+db.close()
 st.rerun()
