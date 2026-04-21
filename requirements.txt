@@ -9,3 +9,4 @@ aiohttp>=3.9.0
 sqlalchemy
 python-multipart
 pytz
+python-dotenv>=1.0.0
