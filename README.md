@@ -1,30 +1,35 @@
 # AI Receptionist
 
-A focused appointment-booking backend with a lightweight operations dashboard. The repository contains a FastAPI API for scheduling and a Streamlit dashboard for viewing appointments.
+A multi-tenant appointment-booking backend with dedicated operations dashboards. This repository contains a FastAPI API for scheduling appointments, with tenant isolation via API keys, and separate Streamlit dashboards for tenants and administrators.
 
 ## Stack
 
 - FastAPI
-- SQLAlchemy
-- SQLite
-- Pydantic
-- Streamlit
+- SQLAlchemy ORM
+- SQLite Database
+- Pydantic Validation
+- Streamlit (Tenant & Admin Dashboards)
+- Multi-tenant architecture with API key authentication
 
 ## Project Structure
 
-- `app/`: API, database models, routes, and services
-- `dashboard.py`: Streamlit dashboard
-- `test.py`: end-to-end booking test script
-- `requirements.txt`: runtime and test dependencies
+- `main.py`: FastAPI API server with all endpoints
+- `database.py`: Database models and connection setup
+- `services.py`: Core business logic for availability checking and booking
+- `tenant_dashboard.py`: Clinic-specific dashboard for viewing appointments
+- `admin_dashboard.py`: System-wide administrator dashboard
+- `requirements.txt`: Runtime dependencies
 
 ## Features
 
-- Clinic-scoped booking with `clinic_id`
-- Appointment-type duration and buffer handling
-- Slot availability checks and final booking revalidation
-- Idempotency support for retries
-- Holiday, weekend, and booking-window validation
-- Dashboard search, filtering, and live refresh
+- ✅ Multi-tenant isolation with API key authentication
+- ✅ Clinic-specific working hours configuration
+- ✅ Intelligent slot availability calculation
+- ✅ Appointment booking with conflict detection
+- ✅ Custom appointment duration support
+- ✅ Timezone handling per clinic
+- ✅ Separate tenant and admin dashboards
+- ✅ Automatic OpenAPI documentation
 
 ## Setup
 
@@ -34,58 +39,108 @@ venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-## Run the API
+## Run the API Server
 
 ```bash
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Available endpoints:
+## API Authentication
 
-- `GET /`
-- `POST /api/v1/check-availability?clinic_id=1`
-- `POST /api/v1/book-appointment?clinic_id=1`
-- `GET /docs`
+All API endpoints (except root) require an `X-API-Key` header for tenant authentication.
 
-## Run the Dashboard
+## Available Endpoints
 
-```bash
-streamlit run dashboard.py
+| Method | Endpoint                | Description                                      |
+|--------|-------------------------|--------------------------------------------------|
+| GET    | `/`                     | API status check                                 |
+| POST   | `/check-availability`   | Get available time slots for a specific date     |
+| POST   | `/book-appointment`     | Book a new appointment                           |
+| GET    | `/clinic/settings`      | Retrieve clinic configuration and working hours  |
+| GET    | `/docs`                 | Interactive OpenAPI documentation                |
+| GET    | `/redoc`                | Alternative API documentation                     |
+
+### Check Availability
+**POST** `/check-availability`
+
+Headers:
+```
+X-API-Key: your-clinic-api-key
+Content-Type: application/json
 ```
 
-## Example Payloads
-
-Check availability:
-
+Request Body:
 ```json
 {
-  "date": "2026-04-20",
-  "appointment_type": "cleaning"
+  "date": "2026-04-22"
 }
 ```
 
-Book appointment:
-
+Response:
 ```json
 {
-  "patient_name": "John Doe",
-  "patient_phone": "+15551234567",
-  "appointment_type": "cleaning",
-  "date": "2026-04-20",
+  "tenant_id": 1,
+  "clinic_name": "Example Clinic",
+  "date": "2026-04-22",
+  "available_slots": ["09:00", "09:30", "10:00", "10:30"]
+}
+```
+
+### Book Appointment
+**POST** `/book-appointment`
+
+Headers:
+```
+X-API-Key: your-clinic-api-key
+Content-Type: application/json
+```
+
+Request Body:
+```json
+{
+  "name": "Patient Full Name",
+  "phone": "+15551234567",
+  "date": "2026-04-22",
   "time": "10:00",
-  "notes": "First visit"
+  "reason": "Appointment description / notes"
 }
 ```
 
-## Testing
+Success Response:
+```json
+{
+  "success": true,
+  "message": "Appointment booked successfully",
+  "appointment_id": 42
+}
+```
 
-Run the scenario script directly:
+### Get Clinic Settings
+**GET** `/clinic/settings`
 
+Headers:
+```
+X-API-Key: your-clinic-api-key
+```
+
+Returns clinic profile, timezone, appointment duration, and configured working hours.
+
+## Run Dashboards
+
+### Tenant Dashboard (Clinic View)
 ```bash
-venv\Scripts\python.exe test.py
+streamlit run tenant_dashboard.py
+```
+
+### Admin Dashboard (System View)
+```bash
+streamlit run admin_dashboard.py
 ```
 
 ## Notes
 
-- The default database is `receptionist.db`.
-- `tzdata` is included for Windows timezone support.
+- Default database file: `receptionist.db` (auto-created on first run)
+- Windows timezone support included via `tzdata`
+- API documentation is available at `http://localhost:8000/docs` when server is running
+- Each clinic/tenant gets a dedicated API key for authentication
+- Appointments are fully isolated between tenants
