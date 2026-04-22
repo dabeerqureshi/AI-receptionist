@@ -10,3 +10,4 @@ sqlalchemy
 python-multipart
 pytz
 python-dotenv>=1.0.0
+plotly
