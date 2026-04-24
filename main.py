@@ -1,8 +1,5 @@
 from fastapi import FastAPI, HTTPException, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
 from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 from datetime import datetime
@@ -10,11 +7,6 @@ from database import SessionLocal, Clinic, ClinicSettings, WorkingHours
 from services import get_clinic_by_api_key, get_available_slots, book_appointment
 
 app = FastAPI(title="AI Receptionist API", version="2.0")
-
-# Rate Limiter setup
-limiter = Limiter(key_func=get_remote_address)
-app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # CORS Configuration
 app.add_middleware(
@@ -80,12 +72,10 @@ class BookingRequest(BaseModel):
 
 
 @app.get("/")
-@limiter.limit("60/minute")
 def root():
     return {"message": "AI Receptionist Multi-Tenant API", "status": "online"}
 
 @app.get("/health")
-@limiter.limit("60/minute")
 def health_check():
     return {
         "status": "healthy",
@@ -95,7 +85,6 @@ def health_check():
 
 
 @app.post("/check-availability")
-@limiter.limit("30/minute")
 def check_date_availability(
     request: AvailabilityRequest,
     clinic: Clinic = Depends(get_tenant),
@@ -111,7 +100,6 @@ def check_date_availability(
 
 
 @app.post("/book-appointment")
-@limiter.limit("10/minute")
 def create_booking(
     request: BookingRequest,
     clinic: Clinic = Depends(get_tenant),
