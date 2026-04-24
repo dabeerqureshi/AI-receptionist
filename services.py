@@ -65,39 +65,52 @@ def get_available_slots(db: Session, tenant_id: str, date_str: str) -> List[str]
 
 
 def check_availability(db: Session, tenant_id: str, date: str, time: str) -> bool:
-    """Check if specific date and time slot is available for tenant"""
+    """Check if specific date and time slot is available for tenant with row locking"""
     existing = db.query(Appointment).filter(
         Appointment.tenant_id == tenant_id,
         Appointment.date == date,
         Appointment.time == time
-    ).first()
+    ).with_for_update().first()
 
     return existing is None
 
 
 def book_appointment(db: Session, tenant_id: str, name: str, phone: str, date: str, time: str, reason: str) -> Dict:
-    """Book an appointment after checking availability for tenant"""
+    """Book an appointment after checking availability for tenant with transaction isolation"""
+    
+    # Use transaction to prevent race conditions
+    try:
+        # Start explicit transaction
+        with db.begin_nested():
+            # Check if slot is already booked with row lock
+            if not check_availability(db, tenant_id, date, time):
+                return {
+                    "success": False,
+                    "message": f"Slot {time} on {date} is already booked. Please choose another time."
+                }
 
-    # Check if slot is already booked
-    if not check_availability(db, tenant_id, date, time):
+            # Create new booking
+            booking = Appointment(
+                tenant_id=tenant_id,
+                name=name,
+                phone=phone,
+                date=date,
+                time=time,
+                reason=reason
+            )
+
+            db.add(booking)
+        
+        # Commit outer transaction
+        db.commit()
+        db.refresh(booking)
+
+    except Exception as e:
+        db.rollback()
         return {
             "success": False,
-            "message": f"Slot {time} on {date} is already booked. Please choose another time."
+            "message": f"Booking failed: {str(e)}"
         }
-
-    # Create new booking
-    booking = Appointment(
-        tenant_id=tenant_id,
-        name=name,
-        phone=phone,
-        date=date,
-        time=time,
-        reason=reason
-    )
-
-    db.add(booking)
-    db.commit()
-    db.refresh(booking)
 
     return {
         "success": True,
