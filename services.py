@@ -105,6 +105,13 @@ def book_appointment(db: Session, tenant_id: str, name: str, phone: str, date: s
         db.commit()
         db.refresh(booking)
 
+    except Exception as e:
+        db.rollback()
+        return {
+            "success": False,
+            "message": f"Booking failed: {str(e)}"
+        }
+
     return {
         "success": True,
         "message": "Appointment booked successfully",
