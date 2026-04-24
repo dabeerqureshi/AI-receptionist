@@ -68,7 +68,7 @@ def refresh_session():
 # Page Configuration
 # ─────────────────────────────────────────────
 st.set_page_config(
-    page_title="MedAdmin — AI Receptionist",
+    page_title="DentalFlow — AI Receptionist",
     page_icon="🏥",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -479,7 +479,7 @@ def get_appointments_df() -> pd.DataFrame:
 # ─────────────────────────────────────────────
 def show_login():
     st.markdown('<div class="login-container">', unsafe_allow_html=True)
-    st.markdown('<div class="login-logo">🏥 MedAdmin</div>', unsafe_allow_html=True)
+    st.markdown('<div class="login-logo">🏥 DentalFlow</div>', unsafe_allow_html=True)
     st.markdown('<div class="login-subtitle">AI Receptionist — Secure Admin Portal</div>', unsafe_allow_html=True)
 
     # Lockout check
@@ -541,7 +541,7 @@ with st.sidebar:
     st.markdown("""
     <div style="padding: 0.5rem 0 1.5rem;">
         <div style="font-family: var(--serif); font-size: 1.4rem; color: var(--text-primary); margin-bottom: 0.15rem;">
-            🏥 MedAdmin
+            🏥 DentalFlow
         </div>
         <div style="font-size: 0.75rem; color: var(--text-muted);">AI Receptionist Console</div>
     </div>
