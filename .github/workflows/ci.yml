@@ -2,20 +2,19 @@ name: CI Pipeline
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, master ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, master ]
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     strategy:
       matrix:
-        python-version: ["3.11"]
+        python-version: ["3.10", "3.11", "3.12"]
 
     steps:
     - uses: actions/checkout@v4
-      name: Checkout repository code
 
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v5
@@ -26,30 +25,26 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install flake8 pytest
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+        pip install -r requirements.txt
+        pip install pytest flake8 black pytest-asyncio
 
     - name: Lint with flake8
       run: |
         flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
 
-    - name: Verify application imports
+    - name: Check formatting with black
       run: |
-        python -c "import main; import services; print('✅ All modules imported successfully')"
-
-    - name: Check FastAPI application health
-      run: |
-        python -c "
-        from main import app
-        assert app is not None
-        print('✅ FastAPI application initialized correctly')
-        "
+        black --check .
 
     - name: Run tests
       run: |
-        if [ -d "tests" ]; then
-          pytest tests/ -v
-        else
-          echo "⚠️ No tests directory found, skipping test run"
-        fi
+        pytest -v
+
+    - name: Verify server starts
+      run: |
+        Start-Process uvicorn -ArgumentList "main:app --host 127.0.0.1 --port 8000"
+        Start-Sleep -Seconds 10
+        $response = Invoke-WebRequest -Uri http://localhost:8000 -UseBasicParsing
+        if ($response.StatusCode -ne 200) { exit 1 }
+        echo "API server started successfully"

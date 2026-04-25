@@ -9,10 +9,23 @@ import pandas as pd
 import plotly.express as px
 from datetime import datetime, date, time, timedelta
 import os
-import hmac
 import secrets
 import logging
 from dotenv import load_dotenv
+from api_client import (
+    APIError,
+    tenant_create_appointment,
+    tenant_delete_appointment,
+    tenant_get_appointment,
+    tenant_get_appointments,
+    tenant_get_clinic,
+    tenant_get_settings,
+    tenant_get_working_hours,
+    tenant_update_appointment,
+    tenant_update_settings,
+    tenant_update_working_hours,
+    tenant_verify_credentials,
+)
 
 # ──────────────────────────────────────────────
 # Bootstrap
@@ -538,12 +551,6 @@ def record_failed_attempt(clinic_id: str):
 
 def clear_rate_limit(clinic_id: str):
     st.session_state.pop(_rate_key(clinic_id), None)
-
-
-def constant_time_compare(a: str, b: str) -> bool:
-    return hmac.compare_digest(a.encode(), b.encode())
-
-
 def sanitize(value: str, max_len: int = 500) -> str:
     return value.strip()[:max_len]
 
@@ -551,45 +558,23 @@ def sanitize(value: str, max_len: int = 500) -> str:
 # ──────────────────────────────────────────────
 # Database
 # ──────────────────────────────────────────────
-@st.cache_resource
-def get_db():
-    try:
-        from database import SessionLocal
-        session = SessionLocal()
-        logger.info("DB session established")
-        return session
-    except Exception as exc:
-        logger.critical("DB connection failed: %s", exc)
-        st.error("⚠️ Database connection failed. Contact your administrator.")
-        st.stop()
-
-
-try:
-    from database import Clinic, ClinicSettings, WorkingHours, Appointment
-    db = get_db()
-except ImportError:
-    st.error("⚠️ `database.py` not found.")
-    st.stop()
-
-
-# ──────────────────────────────────────────────
 # Session State
-# ──────────────────────────────────────────────
 _DEFAULTS = {
     "authenticated": False, "tenant_id": None,
-    "clinic_name": None, "session_token": None, "session_created": None,
+    "clinic_name": None, "api_key": None, "session_token": None, "session_created": None,
 }
 for k, v in _DEFAULTS.items():
     if k not in st.session_state:
         st.session_state[k] = v
 
+
 SESSION_LIFETIME_HOURS = int(os.getenv("SESSION_LIFETIME_HOURS", "8"))
 
 
-def create_session(clinic_id: str, clinic_name: str):
+def create_session(clinic_id: str, clinic_name: str, api_key: str):
     st.session_state.update({
         "authenticated": True, "tenant_id": clinic_id,
-        "clinic_name": clinic_name, "session_token": secrets.token_hex(32),
+        "clinic_name": clinic_name, "api_key": api_key, "session_token": secrets.token_hex(32),
         "session_created": datetime.utcnow(),
     })
     logger.info("Session started clinic_id=%s", clinic_id)
@@ -613,38 +598,30 @@ def validate_session() -> bool:
 
 def verify_credentials(clinic_id: str, api_key: str) -> tuple[bool, str | None]:
     try:
-        clinic = db.query(Clinic).filter(Clinic.id == sanitize(clinic_id, 64)).first()
-        if clinic is None:
-            hmac.compare_digest("dummy", "dummy2")
-            return False, None
-        if constant_time_compare(clinic.api_key, api_key):
-            return True, clinic.name
-        return False, None
-    except Exception as exc:
+        verified_id, clinic_name = tenant_verify_credentials(sanitize(clinic_id, 64), api_key)
+        return verified_id == sanitize(clinic_id, 64), clinic_name
+    except APIError as exc:
         logger.error("Credential error: %s", exc)
         return False, None
 
 
-# ──────────────────────────────────────────────
 # Tenant-scoped DB helpers
-# ──────────────────────────────────────────────
 def tid() -> str:
     return st.session_state.tenant_id
 
 def get_appointments():
-    return db.query(Appointment).filter(Appointment.tenant_id == tid()).order_by(Appointment.date, Appointment.time).all()
+    return tenant_get_appointments(st.session_state.api_key)
 
 def get_settings():
-    return db.query(ClinicSettings).filter(ClinicSettings.tenant_id == tid()).first()
+    return tenant_get_settings(st.session_state.api_key)
 
 def get_working_hours():
-    return db.query(WorkingHours).filter(WorkingHours.tenant_id == tid()).all()
+    return tenant_get_working_hours(st.session_state.api_key)
 
 def get_clinic():
-    return db.query(Clinic).filter(Clinic.id == tid()).first()
+    return tenant_get_clinic(st.session_state.api_key)
 
 
-# ══════════════════════════════════════════════
 # LOGIN PAGE
 # ══════════════════════════════════════════════
 if not validate_session():
@@ -675,7 +652,7 @@ if not validate_session():
                     ok, name = verify_credentials(c_id, api_key_in)
                     if ok:
                         clear_rate_limit(c_id)
-                        create_session(c_id, name)
+                        create_session(c_id, name, api_key_in)
                         st.rerun()
                     else:
                         record_failed_attempt(c_id)
@@ -843,20 +820,18 @@ elif menu == "📅 Appointments":
                     st.error("Patient name and phone are required.")
                 else:
                     try:
-                        db.add(Appointment(
-                            tenant_id=tid(),
-                            name=sanitize(p_name),
-                            phone=sanitize(p_phone, 30),
-                            date=str(p_date),
-                            time=str(p_time)[:5],
-                            reason=sanitize(p_reason),
-                        ))
-                        db.commit()
+                        tenant_create_appointment(
+                            st.session_state.api_key,
+                            sanitize(p_name),
+                            sanitize(p_phone, 30),
+                            str(p_date),
+                            str(p_time)[:5],
+                            sanitize(p_reason),
+                        )
                         logger.info("Appointment created tenant=%s", tid())
                         st.success("✅ Appointment created.")
                         st.rerun()
                     except Exception as exc:
-                        db.rollback()
                         logger.error("Create appt failed: %s", exc)
                         st.error("Failed to save. Please try again.")
 
@@ -906,10 +881,7 @@ elif menu == "📅 Appointments":
         sel_id    = st.selectbox("Select appointment", list(appt_opts.keys()), format_func=lambda x: appt_opts[x])
 
         if sel_id:
-            appt = db.query(Appointment).filter(
-                Appointment.id == sel_id,
-                Appointment.tenant_id == tid()
-            ).first()
+            appt = tenant_get_appointment(st.session_state.api_key, sel_id)
 
             if not appt:
                 st.error("Appointment not found or access denied.")
@@ -930,28 +902,28 @@ elif menu == "📅 Appointments":
 
                     if save_btn:
                         try:
-                            appt.name   = sanitize(e_name)
-                            appt.phone  = sanitize(e_phone, 30)
-                            appt.date   = sanitize(e_date, 10)
-                            appt.time   = sanitize(e_time, 5)
-                            appt.reason = sanitize(e_reason)
-                            db.commit()
+                            tenant_update_appointment(
+                                st.session_state.api_key,
+                                sel_id,
+                                sanitize(e_name),
+                                sanitize(e_phone, 30),
+                                sanitize(e_date, 10),
+                                sanitize(e_time, 5),
+                                sanitize(e_reason),
+                            )
                             st.success("✅ Appointment updated.")
                             st.rerun()
                         except Exception as exc:
-                            db.rollback()
                             logger.error("Update appt %s: %s", sel_id, exc)
                             st.error("Update failed. Please try again.")
 
                     if delete_btn:
                         try:
-                            db.delete(appt)
-                            db.commit()
+                            tenant_delete_appointment(st.session_state.api_key, sel_id)
                             logger.info("Appt %s deleted tenant=%s", sel_id, tid())
                             st.success("✅ Appointment cancelled.")
                             st.rerun()
                         except Exception as exc:
-                            db.rollback()
                             logger.error("Delete appt %s: %s", sel_id, exc)
                             st.error("Delete failed. Please try again.")
 
@@ -1100,15 +1072,11 @@ elif menu == "⏰ Working Hours":
     st.markdown("<br>", unsafe_allow_html=True)
     if st.button("💾 Save Working Hours", type="primary", use_container_width=True):
         try:
-            db.query(WorkingHours).filter(WorkingHours.tenant_id == tid()).delete()
-            for dn, s, e in updated:
-                db.add(WorkingHours(tenant_id=tid(), day_of_week=dn, start_time=s, end_time=e))
-            db.commit()
+            tenant_update_working_hours(st.session_state.api_key, updated)
             logger.info("Working hours saved tenant=%s", tid())
             st.success("✅ Working hours saved.")
             st.rerun()
         except Exception as exc:
-            db.rollback()
             logger.error("Save working hours: %s", exc)
             st.error("Save failed. Please try again.")
 
@@ -1151,13 +1119,11 @@ elif menu == "⚙️ Settings":
         )
         if st.button("💾 Save Settings", type="primary"):
             try:
-                settings.appointment_duration = new_dur
-                db.commit()
+                tenant_update_settings(st.session_state.api_key, new_dur)
                 logger.info("Settings saved tenant=%s dur=%s", tid(), new_dur)
                 st.success("✅ Settings saved.")
                 st.rerun()
             except Exception as exc:
-                db.rollback()
                 logger.error("Save settings: %s", exc)
                 st.error("Save failed. Please try again.")
     else:

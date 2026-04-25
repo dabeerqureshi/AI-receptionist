@@ -9,16 +9,25 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from datetime import time, datetime, timedelta
-from sqlalchemy.orm import Session
-from database import SessionLocal, Clinic, ClinicSettings, WorkingHours, Appointment
-import uuid
 import os
-import hashlib
-import hmac
-import secrets
 import time as time_module
 from dotenv import load_dotenv
 import logging
+from api_client import (
+    APIError,
+    admin_clear_all_data,
+    admin_create_clinic,
+    admin_delete_all_appointments,
+    admin_delete_clinic,
+    admin_get_appointments,
+    admin_get_clinics,
+    admin_get_summary,
+    admin_get_system_health,
+    admin_login,
+    admin_rotate_api_key,
+    admin_update_working_hours,
+)
+from types import SimpleNamespace
 
 # ─────────────────────────────────────────────
 # Logging
@@ -39,20 +48,6 @@ ADMIN_PASSWORD_HASH = os.getenv("ADMIN_PASSWORD_HASH", "").strip()
 SESSION_TIMEOUT_MINUTES = int(os.getenv("SESSION_TIMEOUT_MINUTES", "30"))
 MAX_LOGIN_ATTEMPTS = int(os.getenv("MAX_LOGIN_ATTEMPTS", "5"))
 LOCKOUT_MINUTES = int(os.getenv("LOCKOUT_MINUTES", "15"))
-
-
-def hash_password(password: str) -> str:
-    """SHA-256 password hashing (use bcrypt/argon2 in prod if possible)."""
-    return hashlib.sha256(password.encode("utf-8")).hexdigest()
-
-
-def check_credentials(username: str, password: str) -> bool:
-    """Constant-time credential comparison to prevent timing attacks."""
-    username_ok = hmac.compare_digest(username, ADMIN_USERNAME)
-    password_ok = hmac.compare_digest(hash_password(password), ADMIN_PASSWORD_HASH)
-    return username_ok and password_ok
-
-
 def is_session_expired() -> bool:
     last_active = st.session_state.get("last_active")
     if last_active is None:
@@ -410,71 +405,57 @@ defaults = {
     "last_active": None,
     "login_attempts": 0,
     "lockout_until": None,
+    "admin_token": None,
 }
 for k, v in defaults.items():
     st.session_state.setdefault(k, v)
 
 
-# ─────────────────────────────────────────────
-# Database
-# ─────────────────────────────────────────────
-@st.cache_resource
-def get_db_session():
-    return SessionLocal()
-
-db = get_db_session()
-
-
-# ─────────────────────────────────────────────
 # DB helpers
-# ─────────────────────────────────────────────
-def generate_api_key() -> str:
-    return secrets.token_hex(16)   # 32-char cryptographically random hex
-
 def get_all_clinics():
-    return db.query(Clinic).all()
+    return admin_get_clinics(st.session_state.admin_token)
+
 
 def get_clinic_settings(clinic_id):
-    return db.query(ClinicSettings).filter(ClinicSettings.tenant_id == clinic_id).first()
+    for clinic in get_all_clinics():
+        if clinic.id == clinic_id:
+            return SimpleNamespace(**clinic.settings.__dict__)
+    return None
+
 
 def get_clinic_working_hours(clinic_id):
-    return db.query(WorkingHours).filter(WorkingHours.tenant_id == clinic_id).all()
+    for clinic in get_all_clinics():
+        if clinic.id == clinic_id:
+            return clinic.working_hours
+    return []
 
-def get_all_appointments():
-    return db.query(Appointment).all()
-
-def delete_clinic(clinic_id):
-    db.query(WorkingHours).filter(WorkingHours.tenant_id == clinic_id).delete()
-    db.query(ClinicSettings).filter(ClinicSettings.tenant_id == clinic_id).delete()
-    db.query(Appointment).filter(Appointment.tenant_id == clinic_id).delete()
-    db.query(Clinic).filter(Clinic.id == clinic_id).delete()
-    db.commit()
-    logger.info("Clinic deleted: %s", clinic_id)
 
 def get_appointments_df() -> pd.DataFrame:
-    appts = get_all_appointments()
-    if not appts:
+    appointments = admin_get_appointments(st.session_state.admin_token)
+    if not appointments:
         return pd.DataFrame()
-    clinic_map = {c.id: c.name for c in get_all_clinics()}
+
+    clinics = {clinic.id: clinic.name for clinic in get_all_clinics()}
     rows = []
-    for a in appts:
-        try:
-            rows.append({
-                "id": a.id,
-                "clinic_id": a.tenant_id,
-                "Clinic": clinic_map.get(a.tenant_id, "Unknown"),
-                "Patient": a.name,
-                "Phone": a.phone,
-                "Date": pd.to_datetime(a.date),
-                "Time": str(a.time),
-                "Reason": a.reason,
-            })
-        except Exception as e:
-            logger.warning("Skipping malformed appointment %s: %s", getattr(a, "id", "?"), e)
+    for item in appointments:
+        rows.append({
+            "id": item.id,
+            "clinic_id": item.tenant_id,
+            "Clinic": clinics.get(item.tenant_id, "Unknown"),
+            "Patient": item.name,
+            "Phone": item.phone,
+            "Date": pd.to_datetime(item.date),
+            "Time": item.time,
+            "Reason": item.reason,
+        })
     return pd.DataFrame(rows)
 
 
-# ─────────────────────────────────────────────
+def delete_clinic(clinic_id):
+    admin_delete_clinic(st.session_state.admin_token, clinic_id)
+    logger.info("Clinic deleted: %s", clinic_id)
+
+
 # LOGIN WALL
 # ─────────────────────────────────────────────
 def show_login():
@@ -496,26 +477,28 @@ def show_login():
     password = st.text_input("Password", type="password", placeholder="••••••••")
 
     if st.button("Sign In", type="primary", width="stretch"):
-        if check_credentials(username, password):
+        try:
+            token = admin_login(username, password)
             st.session_state.authenticated = True
+            st.session_state.admin_token = token
             st.session_state.last_active = datetime.now()
             st.session_state.login_attempts = 0
             st.session_state.lockout_until = None
             logger.info("Successful login for user: %s", username)
             st.rerun()
-        else:
+        except APIError:
             st.session_state.login_attempts += 1
             attempts = st.session_state.login_attempts
             logger.warning("Failed login attempt %d for username: %s", attempts, username)
             if attempts >= MAX_LOGIN_ATTEMPTS:
                 st.session_state.lockout_until = datetime.now() + timedelta(minutes=LOCKOUT_MINUTES)
                 st.markdown(f"""<div class="alert alert-danger">
-                    🔒 Account locked for {LOCKOUT_MINUTES} minutes after {MAX_LOGIN_ATTEMPTS} failed attempts.</div>""",
+                    ???? Account locked for {LOCKOUT_MINUTES} minutes after {MAX_LOGIN_ATTEMPTS} failed attempts.</div>""",
                     unsafe_allow_html=True)
             else:
                 remaining = MAX_LOGIN_ATTEMPTS - attempts
                 st.markdown(f"""<div class="alert alert-danger">
-                    ❌ Invalid credentials. {remaining} attempt(s) remaining before lockout.</div>""",
+                    ??? Invalid credentials. {remaining} attempt(s) remaining before lockout.</div>""",
                     unsafe_allow_html=True)
 
     st.markdown("</div>", unsafe_allow_html=True)
@@ -528,6 +511,7 @@ if not st.session_state.authenticated:
 if is_session_expired():
     st.session_state.authenticated = False
     st.session_state.last_active = None
+    st.session_state.admin_token = None
     st.warning("⏱ Session expired. Please log in again.")
     st.rerun()
 
@@ -571,6 +555,8 @@ with st.sidebar:
     if st.button("🚪  Sign Out", width="stretch"):
         st.session_state.authenticated = False
         st.session_state.last_active = None
+        st.session_state.admin_token = None
+        st.session_state.admin_token = None
         logger.info("User signed out: %s", ADMIN_USERNAME)
         st.rerun()
     st.markdown("</div>", unsafe_allow_html=True)
@@ -618,9 +604,10 @@ if menu == "📊 Dashboard":
     st.markdown('<div class="page-title">Overview Dashboard</div>', unsafe_allow_html=True)
     st.markdown('<div class="page-subtitle">Real-time summary of your clinic network</div>', unsafe_allow_html=True)
 
-    total_clinics = db.query(Clinic).count()
-    total_appointments = db.query(Appointment).count()
-    total_wh = db.query(WorkingHours).count()
+    summary = admin_get_summary(st.session_state.admin_token)
+    total_clinics = summary["total_clinics"]
+    total_appointments = summary["total_appointments"]
+    total_wh = summary["total_working_hours"]
     df = get_appointments_df()
 
     today_count = 0
@@ -830,25 +817,14 @@ elif menu == "🏥 Clinics":
                 if not clinic_name.strip():
                     st.markdown('<div class="alert alert-danger">❌ Clinic name is required.</div>', unsafe_allow_html=True)
                 else:
-                    clinic_id = f"clinic_{str(uuid.uuid4())[:8]}"
-                    api_key = generate_api_key()
-
-                    new_clinic = Clinic(id=clinic_id, name=clinic_name.strip(), api_key=api_key)
-                    db.add(new_clinic)
-
-                    new_settings = ClinicSettings(
-                        tenant_id=clinic_id,
-                        timezone=timezone,
-                        appointment_duration=appointment_duration,
+                    result = admin_create_clinic(
+                        st.session_state.admin_token,
+                        clinic_name.strip(),
+                        timezone,
+                        appointment_duration,
                     )
-                    db.add(new_settings)
-
-                    for day in range(5):
-                        db.add(WorkingHours(
-                            tenant_id=clinic_id, day_of_week=day,
-                            start_time=time(9, 0), end_time=time(17, 0),
-                        ))
-                    db.commit()
+                    clinic_id = result["clinic_id"]
+                    api_key = result["api_key"]
                     logger.info("Clinic created: %s (id=%s)", clinic_name, clinic_id)
 
                     st.markdown(f"""
@@ -910,9 +886,7 @@ elif menu == "🏥 Clinics":
                         st.markdown(f'<div class="api-key-box">{clinic.api_key}</div>', unsafe_allow_html=True)
 
                         if st.button("🔄 Rotate API Key", key=f"rotate_{clinic.id}"):
-                            new_key = generate_api_key()
-                            clinic.api_key = new_key
-                            db.commit()
+                            new_key = admin_rotate_api_key(st.session_state.admin_token, clinic.id)
                             logger.info("API key rotated for clinic: %s", clinic.id)
                             st.markdown(f"""<div class="alert alert-success">
                                 ✅ New key generated. Save it now!<br>
@@ -994,10 +968,7 @@ elif menu == "⏰ Working Hours":
 
         st.markdown("")
         if st.button("💾  Save Working Hours", type="primary"):
-            db.query(WorkingHours).filter(WorkingHours.tenant_id == selected_clinic_id).delete()
-            for day_num, start, end in updated_hours:
-                db.add(WorkingHours(tenant_id=selected_clinic_id, day_of_week=day_num, start_time=start, end_time=end))
-            db.commit()
+            admin_update_working_hours(st.session_state.admin_token, selected_clinic_id, updated_hours)
             logger.info("Working hours updated for clinic: %s", selected_clinic_id)
             st.markdown('<div class="alert alert-success">✅ Working hours saved.</div>', unsafe_allow_html=True)
 
@@ -1064,8 +1035,7 @@ elif menu == "📅 Appointments":
             cc1, cc2 = st.columns(2)
             with cc1:
                 if st.button("✅ Yes, delete all"):
-                    db.query(Appointment).delete()
-                    db.commit()
+                    admin_delete_all_appointments(st.session_state.admin_token)
                     st.session_state["confirm_delete_all"] = False
                     logger.warning("All appointments deleted by admin.")
                     st.rerun()
@@ -1088,7 +1058,7 @@ elif menu == "⚙️ System":
     with sc1:
         db_ok = True
         try:
-            db.query(Clinic).count()
+            db_ok = admin_get_system_health(st.session_state.admin_token)["database_connected"]
         except Exception:
             db_ok = False
         badge = "badge-success" if db_ok else "badge-danger"
@@ -1158,11 +1128,7 @@ elif menu == "⚙️ System":
         yc, nc = st.columns(2)
         with yc:
             if st.button("✅ Confirm wipe"):
-                db.query(Appointment).delete()
-                db.query(WorkingHours).delete()
-                db.query(ClinicSettings).delete()
-                db.query(Clinic).delete()
-                db.commit()
+                admin_clear_all_data(st.session_state.admin_token)
                 st.session_state["confirm_clear_all"] = False
                 logger.warning("All data wiped by admin.")
                 st.rerun()
