@@ -10,7 +10,9 @@ def get_clinic_by_api_key(db: Session, api_key: str):
     return db.query(Clinic).filter(Clinic.api_key == api_key).first()
 
 
-def generate_time_slots(start_time: time, end_time: time, duration_minutes: int) -> List[str]:
+def generate_time_slots(
+    start_time: time, end_time: time, duration_minutes: int
+) -> List[str]:
     """Generate time slots between start and end time with given duration"""
     slots = []
     current = datetime.combine(datetime.today(), start_time)
@@ -30,29 +32,33 @@ def get_available_slots(db: Session, tenant_id: str, date_str: str) -> List[str]
     day_of_week = date_obj.weekday()
 
     # Get clinic settings
-    settings = db.query(ClinicSettings).filter(ClinicSettings.tenant_id == tenant_id).first()
+    settings = (
+        db.query(ClinicSettings).filter(ClinicSettings.tenant_id == tenant_id).first()
+    )
     if not settings:
         return []
 
     # Get working hours for this day
-    working_hours = db.query(WorkingHours).filter(
-        WorkingHours.tenant_id == tenant_id,
-        WorkingHours.day_of_week == day_of_week
-    ).first()
+    working_hours = (
+        db.query(WorkingHours)
+        .filter(
+            WorkingHours.tenant_id == tenant_id, WorkingHours.day_of_week == day_of_week
+        )
+        .first()
+    )
 
     if not working_hours:
         return []
 
     # Generate all possible slots for this day
     all_slots = generate_time_slots(
-        working_hours.start_time,
-        working_hours.end_time,
-        settings.appointment_duration
+        working_hours.start_time, working_hours.end_time, settings.appointment_duration
     )
 
     # Get already booked slots for this tenant and date
     booked_times = [
-        booking.time for booking in db.query(Appointment)
+        booking.time
+        for booking in db.query(Appointment)
         .filter(Appointment.tenant_id == tenant_id)
         .filter(Appointment.date == date_str)
         .all()
@@ -66,18 +72,31 @@ def get_available_slots(db: Session, tenant_id: str, date_str: str) -> List[str]
 
 def check_availability(db: Session, tenant_id: str, date: str, time: str) -> bool:
     """Check if specific date and time slot is available for tenant with row locking"""
-    existing = db.query(Appointment).filter(
-        Appointment.tenant_id == tenant_id,
-        Appointment.date == date,
-        Appointment.time == time
-    ).with_for_update().first()
+    existing = (
+        db.query(Appointment)
+        .filter(
+            Appointment.tenant_id == tenant_id,
+            Appointment.date == date,
+            Appointment.time == time,
+        )
+        .with_for_update()
+        .first()
+    )
 
     return existing is None
 
 
-def book_appointment(db: Session, tenant_id: str, name: str, phone: str, date: str, time: str, reason: str) -> Dict:
+def book_appointment(
+    db: Session,
+    tenant_id: str,
+    name: str,
+    phone: str,
+    date: str,
+    time: str,
+    reason: str,
+) -> Dict:
     """Book an appointment after checking availability for tenant with transaction isolation"""
-    
+
     # Use transaction to prevent race conditions
     try:
         # Start explicit transaction
@@ -86,7 +105,7 @@ def book_appointment(db: Session, tenant_id: str, name: str, phone: str, date: s
             if not check_availability(db, tenant_id, date, time):
                 return {
                     "success": False,
-                    "message": f"Slot {time} on {date} is already booked. Please choose another time."
+                    "message": f"Slot {time} on {date} is already booked. Please choose another time.",
                 }
 
             # Create new booking
@@ -96,21 +115,18 @@ def book_appointment(db: Session, tenant_id: str, name: str, phone: str, date: s
                 phone=phone,
                 date=date,
                 time=time,
-                reason=reason
+                reason=reason,
             )
 
             db.add(booking)
-        
+
         # Commit outer transaction
         db.commit()
         db.refresh(booking)
 
     except Exception as e:
         db.rollback()
-        return {
-            "success": False,
-            "message": f"Booking failed: {str(e)}"
-        }
+        return {"success": False, "message": f"Booking failed: {str(e)}"}
 
     return {
         "success": True,
@@ -120,14 +136,16 @@ def book_appointment(db: Session, tenant_id: str, name: str, phone: str, date: s
             "phone": phone,
             "date": date,
             "time": time,
-            "reason": reason
-        }
+            "reason": reason,
+        },
     }
 
 
 def get_current_time_for_tenant(tenant_id: str, db: Session) -> datetime:
     """Get current datetime in tenant's local timezone"""
-    settings = db.query(ClinicSettings).filter(ClinicSettings.tenant_id == tenant_id).first()
+    settings = (
+        db.query(ClinicSettings).filter(ClinicSettings.tenant_id == tenant_id).first()
+    )
     if not settings:
         return datetime.now(ZoneInfo("UTC"))
 

@@ -74,13 +74,17 @@ def validate_admin_credentials(username: str, password: str) -> bool:
 
 def create_admin_session() -> str:
     token = secrets.token_hex(32)
-    admin_sessions[token] = datetime.utcnow() + timedelta(minutes=ADMIN_SESSION_TIMEOUT_MINUTES)
+    admin_sessions[token] = datetime.utcnow() + timedelta(
+        minutes=ADMIN_SESSION_TIMEOUT_MINUTES
+    )
     return token
 
 
 def cleanup_admin_sessions() -> None:
     now = datetime.utcnow()
-    expired = [token for token, expires_at in admin_sessions.items() if expires_at <= now]
+    expired = [
+        token for token, expires_at in admin_sessions.items() if expires_at <= now
+    ]
     for token in expired:
         admin_sessions.pop(token, None)
 
@@ -147,7 +151,9 @@ async def get_admin(
         admin_sessions.pop(token, None)
         raise HTTPException(status_code=401, detail="Admin session expired")
 
-    admin_sessions[token] = datetime.utcnow() + timedelta(minutes=ADMIN_SESSION_TIMEOUT_MINUTES)
+    admin_sessions[token] = datetime.utcnow() + timedelta(
+        minutes=ADMIN_SESSION_TIMEOUT_MINUTES
+    )
     return {"token": token, "db_ok": check_database_connection(db)}
 
 
@@ -249,7 +255,9 @@ class TenantSettingsUpdateRequest(BaseModel):
     appointment_duration: int
 
 
-def parse_working_hours(payload: WorkingHoursUpdateRequest) -> list[tuple[int, datetime.time, datetime.time]]:
+def parse_working_hours(
+    payload: WorkingHoursUpdateRequest,
+) -> list[tuple[int, datetime.time, datetime.time]]:
     parsed = []
     for item in payload.working_hours:
         start_time = datetime.strptime(item.start_time, "%H:%M").time()
@@ -280,7 +288,9 @@ def health_check(db: Session = Depends(get_db)):
 @app.post("/admin/auth/login")
 def admin_login(request: AdminLoginRequest):
     if not ADMIN_USERNAME or not ADMIN_PASSWORD_HASH:
-        raise HTTPException(status_code=500, detail="Admin credentials are not configured")
+        raise HTTPException(
+            status_code=500, detail="Admin credentials are not configured"
+        )
     if not validate_admin_credentials(request.username, request.password):
         raise HTTPException(status_code=401, detail="Invalid admin credentials")
 
@@ -293,7 +303,9 @@ def admin_login(request: AdminLoginRequest):
 
 @app.post("/tenant/auth/verify")
 def tenant_auth_verify(request: TenantAuthRequest, db: Session = Depends(get_db)):
-    is_valid, clinic_name = verify_tenant_credentials(db, request.clinic_id, request.api_key)
+    is_valid, clinic_name = verify_tenant_credentials(
+        db, request.clinic_id, request.api_key
+    )
     if not is_valid:
         raise HTTPException(status_code=401, detail="Invalid clinic ID or API key")
     return {
@@ -372,7 +384,9 @@ def admin_appointments(_: dict = Depends(get_admin), db: Session = Depends(get_d
 
 
 @app.delete("/admin/appointments")
-def admin_delete_appointments(_: dict = Depends(get_admin), db: Session = Depends(get_db)):
+def admin_delete_appointments(
+    _: dict = Depends(get_admin), db: Session = Depends(get_db)
+):
     delete_all_appointments(db)
     return {"success": True}
 
@@ -386,7 +400,9 @@ def admin_system_health(_: dict = Depends(get_admin), db: Session = Depends(get_
 
 
 @app.delete("/admin/system/data")
-def admin_clear_system_data(_: dict = Depends(get_admin), db: Session = Depends(get_db)):
+def admin_clear_system_data(
+    _: dict = Depends(get_admin), db: Session = Depends(get_db)
+):
     clear_all_data(db)
     return {"success": True}
 
@@ -453,7 +469,9 @@ def tenant_clinic(clinic: Clinic = Depends(get_tenant), db: Session = Depends(ge
 
 
 @app.get("/tenant/appointments")
-def tenant_appointments(clinic: Clinic = Depends(get_tenant), db: Session = Depends(get_db)):
+def tenant_appointments(
+    clinic: Clinic = Depends(get_tenant), db: Session = Depends(get_db)
+):
     appointments = get_tenant_appointments(db, clinic.id)
     return {"appointments": [serialize_appointment(item) for item in appointments]}
 

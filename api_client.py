@@ -15,7 +15,9 @@ API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000").rstrip("/")
 
 def _to_namespace(value):
     if isinstance(value, dict):
-        return SimpleNamespace(**{key: _to_namespace(item) for key, item in value.items()})
+        return SimpleNamespace(
+            **{key: _to_namespace(item) for key, item in value.items()}
+        )
     if isinstance(value, list):
         return [_to_namespace(item) for item in value]
     return value
@@ -53,7 +55,9 @@ def api_request(
             message = details or str(exc)
         raise APIError(message) from exc
     except error.URLError as exc:
-        raise APIError(f"Could not reach API at {API_BASE_URL}. Is the FastAPI server running?") from exc
+        raise APIError(
+            f"Could not reach API at {API_BASE_URL}. Is the FastAPI server running?"
+        ) from exc
 
 
 def admin_login(username: str, password: str) -> str:
@@ -74,7 +78,9 @@ def admin_get_clinics(token: str):
     return _to_namespace(response["clinics"])
 
 
-def admin_create_clinic(token: str, clinic_name: str, timezone: str, appointment_duration: int) -> dict:
+def admin_create_clinic(
+    token: str, clinic_name: str, timezone: str, appointment_duration: int
+) -> dict:
     return api_request(
         "POST",
         "/admin/clinics",
@@ -96,7 +102,9 @@ def admin_rotate_api_key(token: str, clinic_id: str) -> str:
     return response["api_key"]
 
 
-def admin_update_working_hours(token: str, clinic_id: str, working_hours: list[tuple[int, object, object]]) -> None:
+def admin_update_working_hours(
+    token: str, clinic_id: str, working_hours: list[tuple[int, object, object]]
+) -> None:
     payload = {
         "working_hours": [
             {
@@ -165,7 +173,9 @@ def tenant_get_appointments(api_key: str):
 
 
 def tenant_get_appointment(api_key: str, appointment_id: int):
-    response = api_request("GET", f"/tenant/appointments/{appointment_id}", api_key=api_key)
+    response = api_request(
+        "GET", f"/tenant/appointments/{appointment_id}", api_key=api_key
+    )
     return _to_namespace(response)
 
 
@@ -218,7 +228,9 @@ def tenant_delete_appointment(api_key: str, appointment_id: int) -> None:
     api_request("DELETE", f"/tenant/appointments/{appointment_id}", api_key=api_key)
 
 
-def tenant_update_working_hours(api_key: str, working_hours: list[tuple[int, object, object]]) -> None:
+def tenant_update_working_hours(
+    api_key: str, working_hours: list[tuple[int, object, object]]
+) -> None:
     payload = {
         "working_hours": [
             {

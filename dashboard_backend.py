@@ -18,7 +18,9 @@ def generate_api_key() -> str:
     return secrets.token_hex(16)
 
 
-def verify_tenant_credentials(db: Session, clinic_id: str, api_key: str) -> tuple[bool, str | None]:
+def verify_tenant_credentials(
+    db: Session, clinic_id: str, api_key: str
+) -> tuple[bool, str | None]:
     clinic = db.query(Clinic).filter(Clinic.id == clinic_id).first()
     if clinic is None:
         hmac.compare_digest("dummy", "dummy2")
@@ -37,7 +39,9 @@ def get_clinic_by_id(db: Session, clinic_id: str):
 
 
 def get_clinic_settings(db: Session, clinic_id: str):
-    return db.query(ClinicSettings).filter(ClinicSettings.tenant_id == clinic_id).first()
+    return (
+        db.query(ClinicSettings).filter(ClinicSettings.tenant_id == clinic_id).first()
+    )
 
 
 def get_clinic_working_hours(db: Session, clinic_id: str):
@@ -96,7 +100,9 @@ def get_admin_dashboard_summary(db: Session) -> dict[str, int]:
     }
 
 
-def create_clinic(db: Session, clinic_name: str, timezone: str, appointment_duration: int) -> tuple[str, str]:
+def create_clinic(
+    db: Session, clinic_name: str, timezone: str, appointment_duration: int
+) -> tuple[str, str]:
     clinic_id = f"clinic_{secrets.token_hex(4)}"
     api_key = generate_api_key()
 
@@ -142,7 +148,9 @@ def delete_clinic(db: Session, clinic_id: str) -> None:
     db.commit()
 
 
-def save_clinic_working_hours(db: Session, clinic_id: str, updated_hours: list[tuple[int, time, time]]) -> None:
+def save_clinic_working_hours(
+    db: Session, clinic_id: str, updated_hours: list[tuple[int, time, time]]
+) -> None:
     db.query(WorkingHours).filter(WorkingHours.tenant_id == clinic_id).delete()
     for day_num, start_time, end_time in updated_hours:
         db.add(
@@ -231,11 +239,15 @@ def delete_tenant_appointment(db: Session, clinic_id: str, appointment_id: int) 
     db.commit()
 
 
-def update_tenant_working_hours(db: Session, clinic_id: str, updated_hours: list[tuple[int, time, time]]) -> None:
+def update_tenant_working_hours(
+    db: Session, clinic_id: str, updated_hours: list[tuple[int, time, time]]
+) -> None:
     save_clinic_working_hours(db, clinic_id, updated_hours)
 
 
-def update_tenant_appointment_duration(db: Session, clinic_id: str, duration: int) -> None:
+def update_tenant_appointment_duration(
+    db: Session, clinic_id: str, duration: int
+) -> None:
     settings = get_clinic_settings(db, clinic_id)
     if settings is None:
         raise ValueError("Settings not found")
